@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -51,6 +53,28 @@ func main() {
 
 	// metrics
 	r.Handle("/metrics", promhttp.Handler())
+
+	store := &Store{}
+
+	// create events
+	r.Post("/events", instrument("/events", func(w http.ResponseWriter, r *http.Request) {
+		var in Event
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Type == "" {
+			http.Error(w, "invalid json (need type, payload)", http.StatusBadRequest)
+			return
+		}
+		created := store.Add(in)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(created)
+	}))
+
+	// list events
+	r.Get("/events", instrument("/events", func(w http.ResponseWriter, r *http.Request) {
+		list := store.List(50)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(list)
+	}))
 
 	srv := &http.Server{Addr: addr, Handler: r}
 
@@ -105,4 +129,40 @@ func logMiddleware(next http.Handler) http.Handler {
 			Dur("duration", time.Since(start)).
 			Msg("request")
 	})
+}
+
+type Event struct {
+	ID         int64     `json:"id"`
+	Type       string    `json:"type"`
+	Payload    string    `json:"payload"`
+	ReceivedAt time.Time `json:"received_at"`
+}
+
+type Store struct {
+	seq    int64
+	events []Event
+	mu     sync.Mutex
+}
+
+func (s *Store) Add(e Event) Event {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.seq++
+	e.ID = s.seq
+	e.ReceivedAt = time.Now().UTC()
+	s.events = append(s.events, e)
+	return e
+}
+
+func (s *Store) List(limit int) []Event {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if limit <= 0 || limit > len(s.events) {
+		limit = len(s.events)
+	}
+	out := make([]Event, 0, limit)
+	for i := len(s.events) - 1; i >= 0 && len(out) < limit; i-- {
+		out = append(out, s.events[i])
+	}
+	return out
 }
