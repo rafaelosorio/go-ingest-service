@@ -12,6 +12,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -30,12 +32,16 @@ var (
 )
 
 func main() {
+	zerolog.TimeFieldFormat = time.RFC3339
+	log.Logger = log.Output(zerolog.NewConsoleWriter())
+
 	addr := getenv("HTTP_ADDR", ":8080")
 
 	prometheus.MustRegister(reqsTotal, reqDuration)
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.RealIP, middleware.Recoverer, middleware.Timeout(30*time.Second))
+	r.Use(logMiddleware)
 
 	// health
 	r.Get("/healthz", instrument("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -87,4 +93,16 @@ func getenv(k, def string) string {
 		return v
 	}
 	return def
+}
+
+func logMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		next.ServeHTTP(w, r)
+		log.Info().
+			Str("method", r.Method).
+			Str("path", r.URL.Path).
+			Dur("duration", time.Since(start)).
+			Msg("request")
+	})
 }
