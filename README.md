@@ -1,9 +1,7 @@
-
 # go-ingest-service
 
 Minimal **Go microservice** for event ingestion with health checks, structured logging, and Prometheus metrics.  
 Built to demonstrate **system design, observability, and scalability** best practices.
-
 
 ## ✨ Features
 - REST API using [chi](https://github.com/go-chi/chi)
@@ -21,11 +19,6 @@ Clone the repo:
 ```bash
 git clone https://github.com/rafaelosorio/go-ingest-service.git
 cd go-ingest-service
-```
-
-Install dependencies:
-
-```bash
 go mod tidy
 ```
 
@@ -57,21 +50,23 @@ curl localhost:8080/healthz
 curl localhost:8080/metrics | head
 ```
 
----
+Example log:
+```
+INF request method=POST path=/events duration=1.2ms
+```
+
 
 ## 🛠 Project Structure
 
 ```
 go-ingest-service/
- └── cmd/api/         # main entrypoint
-     └── main.go
+ ├── cmd/api/         # main entrypoint (package main)
+ │    └── main.go
+ └── internal/        # future packages (handlers, storage, models)
 ```
 
-- `Store` is an in-memory implementation (can be replaced with Postgres).
-- Handlers include basic CRUD-like endpoints.
-- Middleware handles logging, request IDs, recoveries, and timeouts.
-
----
+- `cmd/api/main.go` → entrypoint of the service (binary).  
+- `internal/*` → where future packages will live (storage, handlers, models).  
 
 ## 📊 Observability
 
@@ -84,7 +79,6 @@ Logs are structured with zerolog:
 {"level":"info","method":"POST","path":"/events","duration":0.001,"time":"2025-03-01T12:00:00Z","message":"request"}
 ```
 
----
 
 ## 🧪 Next Steps
 
@@ -94,7 +88,6 @@ Logs are structured with zerolog:
 - [ ] Add k6/vegeta load testing scripts  
 - [ ] Deploy example (Kubernetes)  
 
----
 
 ## 📜 License
 MIT
